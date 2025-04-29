@@ -1,0 +1,8 @@
+name = "line-bot-worker"
+type = "javascript"
+
+account_id = "8319e2d1771176a18cb30db84028d6c5"
+workers_dev = true
+compatibility_date = "2024-04-29"
+
+[vars]

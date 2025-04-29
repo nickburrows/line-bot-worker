@@ -5,13 +5,15 @@
   "main": "index.js",
   "scripts": {
     "start": "wrangler dev",
-    "deploy": "wrangler publish"
+    "deploy": "wrangler publish",
+    "build": "esbuild index.js --bundle --outfile=dist/index.js --platform=node"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "packageManager": "pnpm@10.10.0",
   "dependencies": {
-    "wrangler": "^4.13.2"
+    "wrangler": "^4.13.2",
+    "@line/bot-sdk": "^8.0.0"
   }
 }

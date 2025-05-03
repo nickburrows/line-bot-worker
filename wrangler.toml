@@ -4,5 +4,7 @@ account_id = "8319e2d1771176a18cb30db84028d6c5"
 workers_dev = true
 compatibility_date = "2025-05-03"
 
+main = "./index.js"
+
 [observability.logs]
 enabled = true

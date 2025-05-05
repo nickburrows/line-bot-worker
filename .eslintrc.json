@@ -1,0 +1,15 @@
+{
+  "env": {
+    "node": true
+  },
+  "plugins": ["jsonc"],
+  "overrides": [
+    {
+      "files": ["*.json"],
+      "parser": "jsonc-eslint-parser",
+      "rules": {
+        "jsonc/comma-dangle": ["error", "never"]
+      }
+    }
+  ]
+}

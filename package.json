@@ -5,15 +5,20 @@
   "main": "index.js",
   "scripts": {
     "start": "wrangler dev",
-    "deploy": "wrangler publish",
-    "build": "esbuild index.js --bundle --outfile=dist/index.js --platform=node"
+    "deploy": "wrangler publish"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "packageManager": "pnpm@10.10.0",
   "dependencies": {
-    "wrangler": "^4.13.2",
-    "@line/bot-sdk": "^8.0.0"
+    "@line/bot-sdk": "^8.0.0",
+    "wrangler": "^4.14.1"
+  },
+  "devDependencies": {
+    "eslint": "^9.26.0",
+    "eslint-config-prettier": "^10.1.2",
+    "eslint-plugin-jsonc": "^2.20.0",
+    "prettier": "^3.5.3"
   }
 }

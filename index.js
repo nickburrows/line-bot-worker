@@ -104,28 +104,53 @@ async function verifySignature(secret, bodyBuffer, signature) {
 }
 
 async function translateSmart(text, apiKey) {
-  const url = 'https://translation.googleapis.com/language/translate/v2'
+  const url = 'https://translation.googleapis.com/language/translate/v2';
 
-  const res = await fetch(`${url}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ q: text, target: 'zh-TW', format: 'text' })
-  })
-  const firstPass = await res.json()
-  const detected = firstPass.data.translations[0].detectedSourceLanguage
+  try {
+    // 單次請求同時檢測語言和翻譯
+    const res = await fetch(`${url}?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q: text, target: 'zh-TW', format: 'text' }),
+    });
 
-  const isChinese = detected.startsWith('zh')
-  const targetLang = isChinese ? 'en' : 'zh-TW'
+    if (!res.ok) {
+      console.error('Translation API error:', await res.text());
+      throw new Error('Failed to fetch translation');
+    }
 
-  const finalRes = await fetch(`${url}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ q: text, target: targetLang, format: 'text' })
-  })
+    const data = await res.json();
+    const detected = data.data.translations[0]?.detectedSourceLanguage || 'unknown';
+    const isChinese = detected.startsWith('zh');
+    const targetLang = isChinese ? 'en' : 'zh-TW';
 
-  const final = await finalRes.json()
-  return {
-    translated: final.data.translations[0].translatedText,
-    targetLang
+    // 如果目標語言與初始翻譯不同，進行第二次翻譯
+    if (targetLang !== 'zh-TW') {
+      const finalRes = await fetch(`${url}?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: text, target: targetLang, format: 'text' }),
+      });
+
+      if (!finalRes.ok) {
+        console.error('Final translation API error:', await finalRes.text());
+        throw new Error('Failed to fetch final translation');
+      }
+
+      const finalData = await finalRes.json();
+      return {
+        translated: finalData.data.translations[0]?.translatedText || '',
+        targetLang,
+      };
+    }
+
+    // 如果目標語言是繁體中文，直接返回初始翻譯
+    return {
+      translated: data.data.translations[0]?.translatedText || '',
+      targetLang,
+    };
+  } catch (error) {
+    console.error('Error in translateSmart:', error);
+    throw error;
   }
 }

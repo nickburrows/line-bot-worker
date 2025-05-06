@@ -48,13 +48,14 @@ export default {
       console.log(`Destination User ID: ${event.source.userId}`)
       console.log(`User message: ${userMessage}`)
 
-      // 準備回覆訊息
+      // 根據語言內容翻譯（中文轉英文，其他語言轉繁中）
+      const translationResult = await translateSmart(userMessage, env.GOOGLE_API_KEY)
       const replyPayload = {
         replyToken: event.replyToken,
         messages: [
           {
             type: 'text',
-            text: `你說的是：「${userMessage}」`,
+            text: `${translationResult.translated}`,
           },
         ],
       }
@@ -100,4 +101,31 @@ async function verifySignature(secret, bodyBuffer, signature) {
   const signatureBuffer = await crypto.subtle.sign('HMAC', key, bodyBuffer)
   const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
   return signature === signatureBase64
+}
+
+async function translateSmart(text, apiKey) {
+  const url = 'https://translation.googleapis.com/language/translate/v2'
+
+  const res = await fetch(`${url}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ q: text, target: 'zh-TW', format: 'text' })
+  })
+  const firstPass = await res.json()
+  const detected = firstPass.data.translations[0].detectedSourceLanguage
+
+  const isChinese = detected.startsWith('zh')
+  const targetLang = isChinese ? 'en' : 'zh-TW'
+
+  const finalRes = await fetch(`${url}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ q: text, target: targetLang, format: 'text' })
+  })
+
+  const final = await finalRes.json()
+  return {
+    translated: final.data.translations[0].translatedText,
+    targetLang
+  }
 }

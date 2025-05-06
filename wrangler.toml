@@ -6,5 +6,7 @@ compatibility_date = "2025-05-03"
 
 main = "./index.js"
 
+node_compat = true
+
 [observability.logs]
 enabled = true

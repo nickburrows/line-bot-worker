@@ -1,84 +1,103 @@
-import * as line from '@line/bot-sdk';
-import { Translate } from '@google-cloud/translate';
-
-// 初始化 Google Cloud Translation 客戶端，使用 API 金鑰
+// Worker 主程式
 export default {
   async fetch(request, env) {
     try {
-      // 初始化 Google Cloud Translation 客戶端
-      const translateClient = new Translate({ key: env.GOOGLE_API_KEY });
+      console.log('Request received:', {
+        method: request.method,
+        url: request.url,
+        headers: [...request.headers],
+      })
 
-      // 初始化 LINE 客戶端
-      const lineConfig = {
-        channelAccessToken: env.CHANNEL_ACCESS_TOKEN,
-        channelSecret: env.CHANNEL_SECRET,
-      };
-      const lineClient = new line.Client(lineConfig);
+      // 從環境變數中獲取 LINE 的 Channel Access Token 和 Channel Secret
+      const CHANNEL_ACCESS_TOKEN = env.CHANNEL_ACCESS_TOKEN
+      const CHANNEL_SECRET = env.CHANNEL_SECRET
 
       // 獲取簽章並驗證
-      const signature = request.headers.get('x-line-signature') || '';
-      const body = await request.text();
+      const signature = request.headers.get('x-line-signature') || ''
+      const bodyArrayBuffer = await request.arrayBuffer()
+      const isValid = await verifySignature(CHANNEL_SECRET, bodyArrayBuffer, signature)
 
-      if (!line.validateSignature(body, lineConfig.channelSecret, signature)) {
-        console.error('Invalid signature:', signature);
-        return new Response('Invalid signature', { status: 403 });
+      if (!isValid) {
+        console.error('Invalid signature:', signature)
+        return new Response('Invalid signature', { status: 403 })
       }
 
-      console.log('Signature verified successfully');
+      console.log('Signature verified successfully')
 
       // 解析請求的 JSON 主體
-      const bodyJson = JSON.parse(body);
-      const event = bodyJson.events?.[0];
+      const bodyText = new TextDecoder().decode(bodyArrayBuffer)
+      console.log('Request body:', bodyText)
+      const body = JSON.parse(bodyText)
 
-      if (!event || event.type !== 'message' || !event.replyToken) {
-        console.warn('No valid message or missing replyToken');
-        return new Response('No valid message', { status: 200 });
+      // 確保事件有效
+      const event = body.events?.[0]
+      if (!event) {
+        console.warn('No events found in request body')
+        return new Response('No valid message', { status: 200 })
       }
 
-      const userMessage = event.message.text;
-      console.log(`User message: ${userMessage}`);
+      console.log('Event received:', event)
 
-      // 翻譯訊息
-      const translationResult = await translateSmart(userMessage, translateClient);
+      if (event.type !== 'message' || !event.replyToken) {
+        console.warn('Event is not a valid message or missing replyToken')
+        return new Response('No valid message', { status: 200 })
+      }
 
-      // 回覆訊息
-      const replyMessage = {
-        type: 'text',
-        text: translationResult.translated,
-      };
+      // 處理用戶訊息
+      const userMessage = event.message.text
+      console.log(`Destination User ID: ${event.source.userId}`)
+      console.log(`User message: ${userMessage}`)
 
-      await lineClient.replyMessage(event.replyToken, replyMessage);
-      console.log('Reply sent successfully');
+      // 準備回覆訊息
+      const replyPayload = {
+        replyToken: event.replyToken,
+        messages: [
+          {
+            type: 'text',
+            text: `你說的是：「${userMessage}」`,
+          },
+        ],
+      }
 
-      return new Response('OK', { status: 200 });
+      console.log('Reply payload:', replyPayload)
+
+      // 發送回覆請求到 LINE Messaging API
+      const response = await fetch('https://api.line.me/v2/bot/message/reply', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`,
+        },
+        body: JSON.stringify(replyPayload),
+      })
+
+      console.log('Reply API response status:', response.status)
+      if (!response.ok) {
+        console.error('Reply API error:', await response.text())
+        return new Response('Failed to send reply', { status: 500 })
+      }
+
+      console.log(`Echo message to ${event.replyToken}: ${userMessage}`)
+
+      // 返回成功響應
+      return new Response('OK', { status: 200 })
     } catch (error) {
-      console.error('Error occurred:', error);
-      return new Response('Internal Server Error', { status: 500 });
+      console.error('Error occurred:', error)
+      return new Response('Internal Server Error', { status: 500 })
     }
   },
-};
+}
 
-// 翻譯功能
-async function translateSmart(text, translateClient) {
-  try {
-    // 檢測語言
-    const [detection] = await translateClient.detect(text);
-    const detectedLang = detection.language || 'unknown';
-    console.log(`Detected language: ${detectedLang}`);
-
-    // 決定目標語言
-    const targetLang = detectedLang.startsWith('zh') ? 'en' : 'zh-TW';
-
-    // 翻譯文字
-    const [translation] = await translateClient.translate(text, targetLang);
-    console.log(`Translated text: ${translation}`);
-
-    return {
-      translated: translation,
-      targetLang,
-    };
-  } catch (error) {
-    console.error('Error in translateSmart:', error);
-    throw error;
-  }
+// 簽章驗證函數
+async function verifySignature(secret, bodyBuffer, signature) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+  const signatureBuffer = await crypto.subtle.sign('HMAC', key, bodyBuffer)
+  const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
+  return signature === signatureBase64
 }
